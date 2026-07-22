@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - chatgpt-live-demo-audio-temp-20260722
+  pull_request:
+    branches:
+      - master
 
 permissions:
   contents: read
