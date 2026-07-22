@@ -1,12 +1,10 @@
-name: ChatGPT temporary audio test
+name: ChatGPT temporary audio samples
 
 on:
   push:
-    branches:
-      - chatgpt-live-demo-audio-temp-20260722
+    branches: [chatgpt-live-demo-audio-temp-20260722]
   pull_request:
-    branches:
-      - master
+    branches: [master]
 
 permissions:
   contents: read
@@ -15,13 +13,19 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Create test artifact
+      - name: Install speech generator
+        run: python -m pip install --quiet edge-tts
+      - name: Generate samples
         run: |
           mkdir -p out
-          printf 'temporary test\n' > out/test.txt
+          edge-tts --list-voices > out/voices.txt
+          edge-tts --voice en-GB-RyanNeural --rate=-4% --text "Welcome to this working prototype demonstration." --write-media out/ryan.mp3
+          edge-tts --voice en-GB-SoniaNeural --rate=-3% --text "I am Mary, the Collections Administrator." --write-media out/sonia.mp3
+          edge-tts --voice en-GB-LibbyNeural --rate=-2% --text "I am Sarah, the Collections Supervisor." --write-media out/libby.mp3
+          edge-tts --voice en-GB-ThomasNeural --rate=-3% --text "I am the Collections Orchestration Engine." --write-media out/thomas.mp3
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: chatgpt-temp-audio-test
-          path: out/test.txt
+          name: chatgpt-british-voice-samples
+          path: out
           retention-days: 1
