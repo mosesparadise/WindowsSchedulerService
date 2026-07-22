@@ -1,0 +1,24 @@
+name: ChatGPT temporary audio test
+
+on:
+  push:
+    branches:
+      - chatgpt-live-demo-audio-temp-20260722
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create test artifact
+        run: |
+          mkdir -p out
+          printf 'temporary test\n' > out/test.txt
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-temp-audio-test
+          path: out/test.txt
+          retention-days: 1
