@@ -19,8 +19,10 @@ jobs:
       - name: Generate segmented narration and subtitles
         run: |
           python - <<'PY'
-          import base64, json, pathlib, subprocess, time, zlib
-          packed = pathlib.Path('.github/chatgpt-temp/narration_segments.zlib.b64').read_text().strip()
+          import base64, hashlib, json, pathlib, subprocess, time, zlib
+          parts = sorted(pathlib.Path('.github/chatgpt-temp').glob('narration.part*'))
+          packed = ''.join(path.read_text().strip() for path in parts)
+          print('Payload parts:', len(parts), 'characters:', len(packed), 'sha256:', hashlib.sha256(packed.encode()).hexdigest())
           segments = json.loads(zlib.decompress(base64.b64decode(packed)).decode('utf-8'))
           out = pathlib.Path('out')
           out.mkdir(exist_ok=True)
@@ -33,17 +35,17 @@ jobs:
               subtitles = out / f"{stem}.vtt"
               cmd = ['edge-tts', '--voice', segment['voice'], '--rate', segment['rate'], '--text', segment['text'], '--write-media', str(media), '--write-subtitles', str(subtitles)]
               ok = False
-              for attempt in range(1, 6):
+              for attempt in range(1, 5):
                   result = subprocess.run(cmd, text=True, capture_output=True)
                   log_lines.append(f"{stem} attempt {attempt} rc={result.returncode}\n{result.stdout}\n{result.stderr}")
                   if result.returncode == 0 and media.exists() and media.stat().st_size > 1000:
                       ok = True
                       break
-                  time.sleep(attempt * 4)
+                  time.sleep(attempt * 3)
               if not ok:
                   failures.append(stem)
               manifest.append({**segment, 'index': index, 'media': media.name, 'subtitles': subtitles.name, 'generated': ok})
-              time.sleep(1.0)
+              time.sleep(0.7)
           (out / 'manifest.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
           (out / 'transcript.txt').write_text('\n\n'.join(f"[{s['chapter']}] {s['speaker']}: {s['text']}" for s in segments), encoding='utf-8')
           (out / 'generation.log').write_text('\n\n'.join(log_lines), encoding='utf-8')
