@@ -45,17 +45,20 @@ jobs:
               subtitles = out / f"{stem}.vtt"
               cmd = ['edge-tts', '--voice', segment['voice'], '--rate', segment['rate'], '--text', segment['text'], '--write-media', str(media), '--write-subtitles', str(subtitles)]
               ok = False
-              for attempt in range(1, 5):
-                  result = subprocess.run(cmd, text=True, capture_output=True)
-                  log_lines.append(f"{stem} attempt {attempt} rc={result.returncode}\n{result.stdout}\n{result.stderr}")
-                  if result.returncode == 0 and media.exists() and media.stat().st_size > 1000:
-                      ok = True
-                      break
-                  time.sleep(attempt * 3)
+              for attempt in range(1, 4):
+                  try:
+                      result = subprocess.run(cmd, text=True, capture_output=True, timeout=35)
+                      log_lines.append(f"{stem} attempt {attempt} rc={result.returncode}\n{result.stdout}\n{result.stderr}")
+                      if result.returncode == 0 and media.exists() and media.stat().st_size > 1000:
+                          ok = True
+                          break
+                  except subprocess.TimeoutExpired:
+                      log_lines.append(f"{stem} attempt {attempt} timed out after 35 seconds")
+                  time.sleep(attempt * 2)
               if not ok:
                   failures.append(stem)
               manifest.append({**segment, 'index': index, 'media': media.name, 'subtitles': subtitles.name, 'generated': ok})
-              time.sleep(0.5)
+              time.sleep(0.4)
           (out / f'manifest_chunk_{chunk}.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
           (out / f'generation_chunk_{chunk}.log').write_text('\n\n'.join(log_lines), encoding='utf-8')
           (out / f'failures_chunk_{chunk}.txt').write_text('\n'.join(failures), encoding='utf-8')
