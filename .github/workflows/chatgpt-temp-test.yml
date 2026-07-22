@@ -17,7 +17,6 @@ jobs:
       - name: Install British neural speech generator
         run: python -m pip install --quiet edge-tts
       - name: Generate segmented narration and subtitles
-        continue-on-error: true
         run: |
           python - <<'PY'
           import base64, json, pathlib, subprocess, time, zlib
@@ -50,13 +49,17 @@ jobs:
           (out / 'generation.log').write_text('\n\n'.join(log_lines), encoding='utf-8')
           (out / 'failures.txt').write_text('\n'.join(failures), encoding='utf-8')
           if failures:
-              print('Failed segments:', ', '.join(failures))
-              raise SystemExit(1)
+              raise SystemExit('Failed segments: ' + ', '.join(failures))
           PY
+      - name: Package narration files
+        run: |
+          find out -maxdepth 1 -type f -printf '%f %s bytes\n' | sort
+          zip -q -r credit_collection_narration.zip out
+          ls -lh credit_collection_narration.zip
       - name: Upload narration artifact
-        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: credit-collection-british-narration
-          path: out
+          name: credit-collection-british-narration-zip
+          path: credit_collection_narration.zip
+          if-no-files-found: error
           retention-days: 1
