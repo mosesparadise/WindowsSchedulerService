@@ -2,7 +2,9 @@ name: ChatGPT temporary narration generation
 
 on:
   push:
-    branches: [chatgpt-live-demo-audio-temp-20260722]
+    branches:
+      - chatgpt-live-demo-audio-temp-20260722
+      - chatgpt-live-demo-audio-final-20260722
   pull_request:
     branches: [master]
 
@@ -12,24 +14,32 @@ permissions:
 jobs:
   narration:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        chunk: [0, 1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
       - name: Install British neural speech generator
         run: python -m pip install --quiet edge-tts
-      - name: Generate segmented narration and subtitles
+      - name: Generate narration chunk
+        env:
+          CHUNK: ${{ matrix.chunk }}
         run: |
           python - <<'PY'
-          import base64, hashlib, json, pathlib, subprocess, time, zlib
+          import base64, hashlib, json, os, pathlib, subprocess, time, zlib
+          chunk = int(os.environ['CHUNK'])
           parts = sorted(pathlib.Path('.github/chatgpt-temp').glob('narration.part*'))
           packed = ''.join(path.read_text().strip() for path in parts)
           print('Payload parts:', len(parts), 'characters:', len(packed), 'sha256:', hashlib.sha256(packed.encode()).hexdigest())
           segments = json.loads(zlib.decompress(base64.b64decode(packed)).decode('utf-8'))
           out = pathlib.Path('out')
           out.mkdir(exist_ok=True)
+          selected = [(i, s) for i, s in enumerate(segments) if i % 5 == chunk]
           manifest = []
           failures = []
           log_lines = []
-          for index, segment in enumerate(segments):
+          for index, segment in selected:
               stem = f"{index:02d}_{segment['id']}"
               media = out / f"{stem}.mp3"
               subtitles = out / f"{stem}.vtt"
@@ -45,26 +55,17 @@ jobs:
               if not ok:
                   failures.append(stem)
               manifest.append({**segment, 'index': index, 'media': media.name, 'subtitles': subtitles.name, 'generated': ok})
-              time.sleep(0.7)
-          (out / 'manifest.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
-          (out / 'transcript.txt').write_text('\n\n'.join(f"[{s['chapter']}] {s['speaker']}: {s['text']}" for s in segments), encoding='utf-8')
-          (out / 'generation.log').write_text('\n\n'.join(log_lines), encoding='utf-8')
-          (out / 'failures.txt').write_text('\n'.join(failures), encoding='utf-8')
-          print('Generated', sum(1 for item in manifest if item['generated']), 'of', len(manifest), 'segments')
-          print('Failures:', ', '.join(failures) if failures else 'none')
+              time.sleep(0.5)
+          (out / f'manifest_chunk_{chunk}.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
+          (out / f'generation_chunk_{chunk}.log').write_text('\n\n'.join(log_lines), encoding='utf-8')
+          (out / f'failures_chunk_{chunk}.txt').write_text('\n'.join(failures), encoding='utf-8')
+          print('Chunk', chunk, 'generated', sum(1 for item in manifest if item['generated']), 'of', len(manifest), 'segments')
           PY
-      - name: Package narration files
-        if: always()
-        run: |
-          mkdir -p out
-          find out -maxdepth 1 -type f -printf '%f %s bytes\n' | sort
-          zip -q -r credit_collection_narration.zip out
-          ls -lh credit_collection_narration.zip
-      - name: Upload narration artifact
+      - name: Upload narration chunk
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: credit-collection-british-narration-zip
-          path: credit_collection_narration.zip
+          name: credit-collection-narration-chunk-${{ matrix.chunk }}
+          path: out
           if-no-files-found: error
           retention-days: 1
